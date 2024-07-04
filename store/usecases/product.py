@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 from uuid import UUID
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -5,7 +6,7 @@ import pymongo
 from store.db.mongo import db_client
 from store.models.product import ProductModel
 from store.schemas.product import ProductIn, ProductOut, ProductUpdate, ProductUpdateOut
-from store.core.exceptions import NotFoundException
+from store.core.exceptions import AlreadyExistsException, NotFoundException
 
 
 class ProductUsecase:
@@ -16,6 +17,10 @@ class ProductUsecase:
 
     async def create(self, body: ProductIn) -> ProductOut:
         product_model = ProductModel(**body.model_dump())
+        product = await self.collection.find_one({"id": product_model.id})
+        if product:
+            raise AlreadyExistsException(message=f"Product with id {product_model.id} already exists")
+
         await self.collection.insert_one(product_model.model_dump())
 
         return ProductOut(**product_model.model_dump())
@@ -32,9 +37,16 @@ class ProductUsecase:
         return [ProductOut(**item) async for item in self.collection.find()]
 
     async def update(self, id: UUID, body: ProductUpdate) -> ProductUpdateOut:
+        product = await self.collection.find_one({"id": id})
+        if not product:
+            raise NotFoundException(message=f"Product not found with filter: {id}")
+        
+        update_data = body.model_dump(exclude_none=True)
+        update_data['updated_at'] = datetime.now(datetime.UTC)
+
         result = await self.collection.find_one_and_update(
             filter={"id": id},
-            update={"$set": body.model_dump(exclude_none=True)},
+            update={"$set": update_data},
             return_document=pymongo.ReturnDocument.AFTER,
         )
 

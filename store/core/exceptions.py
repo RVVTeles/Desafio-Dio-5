@@ -8,3 +8,6 @@ class BaseException(Exception):
 
 class NotFoundException(BaseException):
     message = "Not Found"
+
+class AlreadyExistsException(BaseException):
+    message = "Product already exists"
